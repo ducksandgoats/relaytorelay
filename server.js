@@ -62,8 +62,8 @@ export default class Server extends Events {
         }
         this.hashes = new Set(opts.hashes)
         this.relays = new Map((() => {const test = [];this.hashes.forEach((data) => {test.push([crypto.createHash('sha1').update(data).digest('hex'), []])});return test;})())
-        // this.offers = new Map((() => {const test = [];this.hashes.forEach((data) => {test.push([data, new Set()])});return test;})())
-        this.offers = (() => {const test = {};this.hashes.forEach((data) => {test[data] = new Map()});return test;})()
+        this.offers = new Map((() => {const test = [];this.hashes.forEach((data) => {test.push([data, new Set()])});return test;})())
+        // this.offers = (() => {const test = {};this.hashes.forEach((data) => {test[data] = new Map()});return test;})()
 
         this.http = http.createServer()
         this.http.onError = (err) => {
@@ -330,7 +330,7 @@ export default class Server extends Events {
           if(data.action === 'session'){
             socket.wait = 2
             socket.stamp = null
-            this.sessionOffers(socket, this.matchOffers(socket))
+            this.matchOffers(socket)
           } else if(data.action === 'proc'){
             socket.wait = 3
             socket.stamp = Date.now()
@@ -356,7 +356,7 @@ export default class Server extends Events {
               test.stamp = Date.now()
             } else {
               socket.send(JSON.stringify({action: 'interrupt', id: data.res}))
-              this.sessionOffers(socket, this.matchOffers(socket))
+              this.matchOffers(socket)
             }
           }
           if(data.action === 'response'){
@@ -369,7 +369,7 @@ export default class Server extends Events {
               test.stamp = Date.now()
             } else {
               socket.send(JSON.stringify({action: 'interrupt', id: data.req}))
-              this.sessionOffers(socket, this.matchOffers(socket))
+              this.matchOffers(socket)
             }
           }
         } catch (err) {
@@ -384,8 +384,8 @@ export default class Server extends Events {
 
       socket.onClose = (code, reason) => {
         socket.onHandle()
-        const offer = this.offers[socket.hash]
-        if(offer){
+        if(this.offers.has(socket.hash)){
+          const offer = this.offers.get(socket.hash)
           socket.offers.forEach((e) => {
             if(offer.has(e)){
               offer.delete(e)
@@ -398,7 +398,7 @@ export default class Server extends Events {
             const matched = this.clients.get(id)
             matched.send(JSON.stringify({action: 'interrupt', id: socket.id}))
             matched.ids.delete(socket.id)
-            this.sessionOffers(matched, this.matchOffers(matched))
+            this.matchOffers(matched)
           }
         })
         socket.ids.clear()
@@ -417,7 +417,7 @@ export default class Server extends Events {
       socket.on('error', socket.onError)
       socket.on('close', socket.onClose)
 
-      this.sessionOffers(socket, this.matchOffers(socket))
+      this.matchOffers(socket)
     }
 
     onServerConnection(socket){
@@ -585,39 +585,33 @@ export default class Server extends Events {
     }
 
     matchOffers(socket){
-      const testing = this.offers[socket.hash]
-      if(testing){
+      if(this.offers.has(socket.hash)){
+        const testing = this.offers.get(socket.hash)
         for(const test of testing.values()){
           if(socket.id === test.user || socket.web.has(test.user) || socket.ids.has(test.user)){
             continue
           } else {
-            testing.delete(test.id)
+            testing.delete(test)
             if(this.clients.has(test.user)){
               const chan = this.clients.get(test.user)
-              chan.offers.delete(test.id)
-              return chan
+              chan.offers.delete(test)
+              chan.ids.add(socket.id)
+              socket.ids.add(chan.id)
+              socket.send(JSON.stringify({req: socket.id, res: chan.id, action: 'init'}))
+              socket.wait = 2
+              socket.stamp = Date.now()
+              return
             } else {
               continue
             }
           }
         }
       }
-      return null
-    }
-    sessionOffers(reqSocket, resSocket){
-      if(resSocket){
-        resSocket.ids.add(reqSocket.id)
-        reqSocket.ids.add(resSocket.id)
-        reqSocket.send(JSON.stringify({req: reqSocket.id, res: resSocket.id, action: 'init'}))
-        reqSocket.wait = 2
-        reqSocket.stamp = Date.now()
-      } else {
-        const test = this.offers[reqSocket.hash]
-        if(test){
-          const waiting = crypto.randomUUID()
-          test.set(waiting, {id: waiting, user: reqSocket.id})
-          reqSocket.offers.add(waiting)
-        }
+      if(this.offers.has(socket.hash)){
+        const test = this.offers.get(socket.hash)
+        const waiting = {user: socket.id}
+        test.add(waiting)
+        socket.offers.add(waiting)
       }
     }
     start(){
