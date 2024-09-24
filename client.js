@@ -8,8 +8,7 @@ export default class Client extends Events {
         this.dev = Boolean(opts.dev)
         this.user = Boolean(opts.user)
         this.id = this.user ? localStorage.getItem('id') : sessionStorage.getItem('id')
-        this.browserOrNot = typeof(window) !== 'undefined'
-        this.db = new Level(this.browserOrNot ? 'db' : './db')
+        this.db = new Level(opts.db || 'relay')
         if(!this.id){
             this.id = crypto.randomUUID()
             if(this.user){
