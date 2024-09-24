@@ -272,7 +272,7 @@ export default class Client extends Events {
             }
 
             channel.messages.forEach(async (data) => {
-                const test = await this.haveOrNot(this.db.get(data))
+                const test = await this.check(data)
                 if(test){
                     if(test.startRelay){
                         if(this.channels.has(test.startRelay)){
@@ -380,7 +380,7 @@ export default class Client extends Events {
         }
     }
     async abortion(obj, chan){
-        const test = await this.haveOrNot(this.db.get(obj.id))
+        const test = await this.check(obj.id)
         if(test){
             if(chan.id === test.startRelay && test.stopRelay && this.channels.has(test.stopRelay)){
                 this.channels.get(test.stopRelay).send(JSON.stringify(obj))
@@ -452,7 +452,7 @@ export default class Client extends Events {
                 console.error(err)
             })
         } else {
-            const test = await this.haveOrNot(this.db.get(obj.id))
+            const test = await this.check(obj.id)
             if(test){
                 obj.action = 'nonmsg'
                 chan.send('trystereo:' + JSON.stringify(obj))
@@ -523,7 +523,7 @@ export default class Client extends Events {
                 return
             }
         } else {
-            const base = await this.haveOrNot(this.db.get(obj.id))
+            const base = await this.check(obj.id)
             if(!base){
                 return
             } else {
@@ -605,7 +605,7 @@ export default class Client extends Events {
             })
             testChannel.signal(obj.data)
         } else {
-            const test = await this.haveOrNot(this.db.get(obj.id))
+            const test = await this.check(obj.id)
             if(test){
                 // test.stopRelay === chan.id && test.start === obj.start && this.channels.has(test.startRelay)
                 if(test.stopRelay === chan.id && this.channels.has(test.startRelay)){
@@ -665,7 +665,7 @@ export default class Client extends Events {
             testChannel.signal(obj.data)
             delete obj.data
         } else {
-            const test = await this.haveOrNot(this.db.get(obj.id))
+            const test = await this.check(obj.id)
             if(test){
                 // chan.id === test.startRelay && test.start === obj.start && test.stop === obj.stop && this.channels.has(test.stopRelay)
                 if(chan.id === test.startRelay && this.channels.has(test.stopRelay)){
@@ -686,7 +686,7 @@ export default class Client extends Events {
         }
     }
     async afterSession(obj, chan){
-        const base = await this.haveOrNot(this.db.get(obj.id))
+        const base = await this.check(obj.id)
         if(base){
             if(base.startRelay === chan.id){
                 if(this.channels.has(base.stopRelay)){
@@ -715,9 +715,9 @@ export default class Client extends Events {
         }
     }
 
-    async haveOrNot(data){
+    async check(data){
         try {
-            return await data
+            return await this.db.get(data)
         } catch (error) {
             console.error(error)
             return null
