@@ -272,7 +272,7 @@ export default class Client extends Events {
             }
 
             channel.messages.forEach(async (data) => {
-                const test = await this.check(data)
+                const test = await this.dbGet(data)
                 if(test){
                     if(test.startRelay){
                         if(this.channels.has(test.startRelay)){
@@ -380,7 +380,7 @@ export default class Client extends Events {
         }
     }
     async abortion(obj, chan){
-        const test = await this.check(obj.id)
+        const test = await this.dbGet(obj.id)
         if(test){
             if(chan.id === test.startRelay && test.stopRelay && this.channels.has(test.stopRelay)){
                 this.channels.get(test.stopRelay).send(JSON.stringify(obj))
@@ -388,7 +388,7 @@ export default class Client extends Events {
             if(chan.id === test.stopRelay && test.startRelay && this.channels.has(test.startRelay)){
                 this.channels.get(test.startRelay).send(JSON.stringify(obj))
             }
-            await this.db.del(test.id)
+            await this.dbDelete(test.id)
         } else {
             if(this.temp.has(obj.id)){
                 this.temp.delete(obj.id)
@@ -452,7 +452,7 @@ export default class Client extends Events {
                 console.error(err)
             })
         } else {
-            const test = await this.check(obj.id)
+            const test = await this.dbGet(obj.id)
             if(test){
                 obj.action = 'nonmsg'
                 chan.send('trystereo:' + JSON.stringify(obj))
@@ -463,7 +463,13 @@ export default class Client extends Events {
                 }
             }
             const base = {startRelay: chan.id, tried: [], id: obj.id, start: obj.start}
-            await this.db.put(base.id, base)
+            const checkInit = await this.dbPost(base.id, base)
+            if(!checkInit){
+                await this.dbDelete(base.id)
+                obj.action = 'nonmsg'
+                chan.send('trystereo:' + JSON.stringify(obj))
+                return
+            }
 
             const arr = []
             const list = new Set()
@@ -480,7 +486,13 @@ export default class Client extends Events {
                 obj.action = 'beforeSearch'
                 base.tried.push(i.id)
                 base.stopRelay = i.id
-                await this.db.put(base.id, base)
+                const checkBefore = this.dbPost(base.id, base)
+                if(!checkBefore){
+                    await this.dbDelete(base.id)
+                    obj.action = 'nonmsg'
+                    chan.send('trystereo:' + JSON.stringify(obj))
+                    return
+                }
                 i.send('trystereo:' + JSON.stringify(obj))
             } else {
                 if(this.channels.has(base.startRelay)){
@@ -494,7 +506,7 @@ export default class Client extends Events {
                 if(this.dev){
                     console.log('deleted db obj')
                 }
-                await this.db.del(base.id)
+                await this.dbDelete(base.id)
             }
         }
     }
@@ -523,12 +535,12 @@ export default class Client extends Events {
                 return
             }
         } else {
-            const base = await this.check(obj.id)
+            const base = await this.dbGet(obj.id)
             if(!base){
                 return
             } else {
                 if(!this.channels.has(base.startRelay)){
-                    await this.db.del(base.id)
+                    await this.dbDelete(base.id)
                     return
                 }
             }
@@ -548,7 +560,16 @@ export default class Client extends Events {
                 obj.action = 'beforeSearch'
                 base.tried.push(i.id)
                 base.stopRelay = i.id
-                await this.db.put(base.id, base)
+                const checkBefore = await this.dbPost(base.id, base)
+                if(!checkBefore){
+                    await this.dbDelete(base.id, base)
+                    obj.action = 'nonmsg'
+                    const sendToChannel = this.channels.has(base.startRelay) ? this.channels.get(base.startRelay) : null
+                    if(sendToChannel){
+                        sendToChannel.send('trystereo:' + JSON.stringify(obj))
+                    }
+                    return
+                }
                 i.send('trystereo:' + JSON.stringify(obj))
             } else {
                 if(this.channels.has(base.startRelay)){
@@ -562,7 +583,7 @@ export default class Client extends Events {
                 if(this.dev){
                     console.log('deleted db obj')
                 }
-                await this.db.del(base.id)
+                await this.dbDelete(base.id)
             }
         }
     }
@@ -605,7 +626,7 @@ export default class Client extends Events {
             })
             testChannel.signal(obj.data)
         } else {
-            const test = await this.check(obj.id)
+            const test = await this.dbGet(obj.id)
             if(test){
                 // test.stopRelay === chan.id && test.start === obj.start && this.channels.has(test.startRelay)
                 if(test.stopRelay === chan.id && this.channels.has(test.startRelay)){
@@ -614,11 +635,16 @@ export default class Client extends Events {
                     if(!chan.messages.has(obj.id)){
                         chan.messages.add(obj.id)
                     }
-                    await this.db.put(test.id, test)
+                    const afterCheck = await this.dbPost(test.id, test)
+                    if(!afterCheck){
+                        await this.dbDelete(test.id)
+                        obj.action = 'abort'
+                        chan.send('trystereo:' + JSON.stringify(obj))
+                    }
                 } else {
                     obj.action = 'abort'
                     chan.send('trystereo:' + JSON.stringify(obj))
-                    await this.db.del(test.id)
+                    await this.dbDelete(test.id)
                 }
             } else {
                 obj.action = 'abort'
@@ -665,7 +691,7 @@ export default class Client extends Events {
             testChannel.signal(obj.data)
             delete obj.data
         } else {
-            const test = await this.check(obj.id)
+            const test = await this.dbGet(obj.id)
             if(test){
                 // chan.id === test.startRelay && test.start === obj.start && test.stop === obj.stop && this.channels.has(test.stopRelay)
                 if(chan.id === test.startRelay && this.channels.has(test.stopRelay)){
@@ -673,11 +699,16 @@ export default class Client extends Events {
                     if(!chan.messages.has(obj.id)){
                         chan.messages.add(obj.id)
                     }
-                    await this.db.put(test.id, test)
+                    const afterCheck = await this.dbPost(test.id, test)
+                    if(!afterCheck){
+                        await this.dbDelete(test.id)
+                        obj.action = 'abort'
+                        chan.send('trystereo:' + JSON.stringify(obj))
+                    }
                 } else {
                     obj.action = 'abort'
                     chan.send('trystereo:' + JSON.stringify(obj))
-                    await this.db.del(test.id)
+                    await this.dbDelete(test.id)
                 }
             } else {
                 obj.action = 'abort'
@@ -686,7 +717,7 @@ export default class Client extends Events {
         }
     }
     async afterSession(obj, chan){
-        const base = await this.check(obj.id)
+        const base = await this.dbGet(obj.id)
         if(base){
             if(base.startRelay === chan.id){
                 if(this.channels.has(base.stopRelay)){
@@ -698,7 +729,7 @@ export default class Client extends Events {
                     this.channels.get(base.startRelay).send(JSON.stringify(obj))
                 }
             }
-            await this.db.del(obj.id)
+            await this.dbDelete(obj.id)
         } else {
             if(obj.start === this.id){
                 if(this.channels.has(obj.stop)){
@@ -715,11 +746,28 @@ export default class Client extends Events {
         }
     }
 
-    async check(data){
+    async dbDelete(id){
         try {
-            return await this.db.get(data)
-        } catch (error) {
-            console.error(error)
+            await this.db.del(id)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    async dbPost(id, data){
+        try {
+            await this.db.put(id, data)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    async dbGet(id){
+        try {
+            return await this.db.get(id)
+        } catch {
             return null
         }
     }
