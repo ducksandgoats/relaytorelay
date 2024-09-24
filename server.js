@@ -585,8 +585,8 @@ export default class Server extends Events {
     }
 
     matchOffers(socket){
-      if(this.offers.has(socket.hash)){
-        const testing = this.offers.get(socket.hash)
+      const testing = this.offers.has(socket.hash) ? this.offers.get(socket.hash) : null
+      if(testing){
         for(const test of testing.values()){
           if(socket.id === test.user || socket.web.has(test.user) || socket.ids.has(test.user)){
             continue
@@ -607,10 +607,9 @@ export default class Server extends Events {
           }
         }
       }
-      if(this.offers.has(socket.hash)){
-        const test = this.offers.get(socket.hash)
+      if(testing){
         const waiting = {user: socket.id}
-        test.add(waiting)
+        testing.add(waiting)
         socket.offers.add(waiting)
       }
     }
